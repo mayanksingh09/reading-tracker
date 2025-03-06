@@ -1,17 +1,44 @@
 import styles from '../styles/Home.module.css';
 import { useState } from 'react';
 
+import { useEffect } from 'react';
+import { initDB, getEntries, addEntry, updateReadStatus } from '../utils/db';
+
 export default function Home() {
   const [entries, setEntries] = useState([]);
   const [newName, setNewName] = useState('');
   const [newLink, setNewLink] = useState('');
 
-  const addEntry = (e) => {
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        await initDB();
+        const entriesData = await getEntries();
+        setEntries(entriesData);
+      } catch (err) { console.error(err); }
+    };
+    
+    fetchData();
+  }, []);
+
+  const addEntry = async (e) => {
     e.preventDefault();
     if (!newName || !newLink) return;
-    setEntries([...entries, { name: newName, link: newLink, read: false }]);
-    setNewName('');
-    setNewLink('');
+    
+    try {
+      const res = await fetch('/api/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName, link: newLink })
+      });
+      
+      if (res.ok) {
+        const newEntry = await res.json();
+        setEntries([...entries, newEntry]);
+        setNewName('');
+        setNewLink('');
+      }
+    } catch (err) { console.error(err); }
   };
 
   return (
@@ -49,9 +76,21 @@ export default function Home() {
               type="checkbox"
               checked={entry.read}
               onChange={() => {
+                const entryId = entries[index].id;
+                const newReadStatus = !entry.read;
+
+                // Update state immediately
                 const newEntries = [...entries];
-                newEntries[index].read = !newEntries[index].read;
+                newEntries[index].read = newReadStatus;
                 setEntries(newEntries);
+
+                try {
+                  await fetch('/api/update-read', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: entryId, read: newReadStatus })
+                  });
+                } catch (err) { console.error(err); }
               }}
             />
           </label>
