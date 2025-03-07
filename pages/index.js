@@ -17,21 +17,21 @@ export default function Home() {
         setEntries(entriesData);
       } catch (err) { console.error(err); }
     };
-    
+
     fetchData();
   }, []);
 
   const addEntry = async (e) => {
     e.preventDefault();
     if (!newName || !newLink) return;
-    
+
     try {
       const res = await fetch('/api/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName, link: newLink })
       });
-      
+
       if (res.ok) {
         const newEntry = await res.json();
         setEntries([...entries, newEntry]);
@@ -44,18 +44,18 @@ export default function Home() {
   return (
     <div className={styles.container}>
       <h1>Reading Tracker</h1>
-      
+
       {/* Add Entry Form */}
       <form onSubmit={addEntry} className={styles.form}>
-        <input 
-          type="text" 
+        <input
+          type="text"
           placeholder="Article/Book Name"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           required
         />
-        <input 
-          type="url" 
+        <input
+          type="url"
           placeholder="Link URL"
           value={newLink}
           onChange={(e) => setNewLink(e.target.value)}
@@ -72,10 +72,10 @@ export default function Home() {
           </a>
           <label>
             Read?
-            <input 
+            <input
               type="checkbox"
               checked={entry.read}
-              onChange={() => {
+              onChange={async () => {
                 const entryId = entries[index].id;
                 const newReadStatus = !entry.read;
 
