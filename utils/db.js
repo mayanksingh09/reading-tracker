@@ -30,8 +30,13 @@ async function getEntries() {
 async function addEntry(name, link) {
   return new Promise((resolve, reject) => {
     db.run('INSERT INTO entries (name, link) VALUES (?,?)',
-           [name, link], (err) => 
-             err ? reject(err) : resolve(this.lastID));
+           [name, link], function(err) {
+             if (err) {
+               reject(err);
+             } else {
+               resolve(this.lastID);
+             }
+           });
   });
 }
 
