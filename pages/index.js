@@ -6,8 +6,7 @@ export default function Home() {
   const [newName, setNewName] = useState('');
   const [newLink, setNewLink] = useState('');
 
-  useEffect(() => {
-    const fetchData = async () => {
+  const fetchData = async () => {
       try {
         const res = await fetch('/api/entries');
         const entriesData = await res.json();
@@ -15,6 +14,7 @@ export default function Home() {
       } catch (err) { console.error(err); }
     };
 
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -30,8 +30,7 @@ export default function Home() {
       });
 
       if (res.ok) {
-        const newEntry = await res.json();
-        setEntries([...entries, newEntry]);
+        await fetchData();
         setNewName('');
         setNewLink('');
       }
