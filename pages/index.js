@@ -1,8 +1,5 @@
 import styles from '../styles/Home.module.css';
-import { useState } from 'react';
-
-import { useEffect } from 'react';
-import { initDB, getEntries, addEntry, updateReadStatus } from '../utils/db';
+import { useState, useEffect } from 'react';
 
 export default function Home() {
   const [entries, setEntries] = useState([]);
@@ -12,8 +9,8 @@ export default function Home() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        await initDB();
-        const entriesData = await getEntries();
+        const res = await fetch('/api/entries');
+        const entriesData = await res.json();
         setEntries(entriesData);
       } catch (err) { console.error(err); }
     };
