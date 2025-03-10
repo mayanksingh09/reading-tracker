@@ -1,4 +1,4 @@
-This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+This file is a merged representation of a subset of the codebase, containing files not matching ignore patterns, combined into a single document by Repomix.
 
 ================================================================
 File Summary
@@ -36,6 +36,7 @@ Notes:
 ------
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching these patterns are excluded: supabase/seed.sql
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 
@@ -46,9 +47,15 @@ Additional Info:
 Directory Structure
 ================================================================
 pages/
+  api/
+    add.js
+    entries.js
+    update-read.js
   index.js
 styles/
   Home.module.css
+utils/
+  db.js
 next.config.js
 package.json
 
@@ -57,39 +64,117 @@ Files
 ================================================================
 
 ================
+File: pages/api/add.js
+================
+import { initDB, addEntry } from '../../utils/db';
+
+export default async function handler(req, res) {
+  if (req.method === 'POST') {
+    try {
+      await initDB();
+      const newId = await addEntry(req.body.name, req.body.link);
+      res.status(201).json({ id: newId, ...req.body, read:false });
+    } catch (err) { 
+      res.status(500).send('Error adding entry'); 
+    }
+  } else {
+    res.setHeader('Allow', ['POST']);
+    res.status(405).end();
+  }
+}
+
+================
+File: pages/api/entries.js
+================
+import { initDB, getEntries } from '../../utils/db';
+
+export default async function handler(req, res) {
+  try {
+    await initDB();
+    const entries = await getEntries();
+    res.status(200).json(entries);
+  } catch (err) {
+    res.status(500).send('Error fetching entries');
+  }
+}
+
+================
+File: pages/api/update-read.js
+================
+import { initDB, updateReadStatus } from '../../utils/db';
+
+export default async function handler(req, res) {
+  if (req.method === 'PUT') {
+    try {
+      await initDB();
+      await updateReadStatus(req.body.id, req.body.read);
+      res.status(200).json({ success: true });
+    } catch (err) { 
+      res.status(500).send('Error updating entry'); 
+    }
+  } else {
+    res.setHeader('Allow', ['PUT']);
+    res.status(405).end();
+  }
+}
+
+================
 File: pages/index.js
 ================
 import styles from '../styles/Home.module.css';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function Home() {
   const [entries, setEntries] = useState([]);
   const [newName, setNewName] = useState('');
   const [newLink, setNewLink] = useState('');
 
-  const addEntry = (e) => {
+  const fetchData = async () => {
+      try {
+        const res = await fetch('/api/entries');
+        const entriesData = await res.json();
+        setEntries(entriesData);
+      } catch (err) { console.error(err); }
+    };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const addEntry = async (e) => {
     e.preventDefault();
     if (!newName || !newLink) return;
-    setEntries([...entries, { name: newName, link: newLink, read: false }]);
-    setNewName('');
-    setNewLink('');
+
+    try {
+      const res = await fetch('/api/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName, link: newLink })
+      });
+
+      if (res.ok) {
+        await fetchData();
+        setNewName('');
+        setNewLink('');
+      }
+    } catch (err) { console.error(err); }
   };
 
   return (
     <div className={styles.container}>
       <h1>Reading Tracker</h1>
-      
+
       {/* Add Entry Form */}
       <form onSubmit={addEntry} className={styles.form}>
-        <input 
-          type="text" 
+        <input
+          type="text"
           placeholder="Article/Book Name"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           required
         />
-        <input 
-          type="url" 
+        <input
+          type="url"
           placeholder="Link URL"
           value={newLink}
           onChange={(e) => setNewLink(e.target.value)}
@@ -106,13 +191,25 @@ export default function Home() {
           </a>
           <label>
             Read?
-            <input 
+            <input
               type="checkbox"
               checked={entry.read}
-              onChange={() => {
+              onChange={async () => {
+                const entryId = entries[index].id;
+                const newReadStatus = !entry.read;
+
+                // Update state immediately
                 const newEntries = [...entries];
-                newEntries[index].read = !newEntries[index].read;
+                newEntries[index].read = newReadStatus;
                 setEntries(newEntries);
+
+                try {
+                  await fetch('/api/update-read', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: entryId, read: newReadStatus })
+                  });
+                } catch (err) { console.error(err); }
               }}
             />
           </label>
@@ -172,6 +269,60 @@ File: styles/Home.module.css
 }
 
 ================
+File: utils/db.js
+================
+const sqlite3 = require('sqlite3').verbose();
+
+let db;
+
+function initDB() {
+  return new Promise((resolve, reject) => {
+    db = new sqlite3.Database(__dirname + '/../entries.db', (err) => {
+      if (err) { console.error(err); reject(err); }
+      resolve(db);
+    });
+    
+    const stmt = `CREATE TABLE IF NOT EXISTS entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      link TEXT NOT NULL,
+      read BOOLEAN DEFAULT 0
+    )`;
+    
+    db.run(stmt, (err) => { if (err) console.error(err); });
+  });
+}
+
+async function getEntries() {
+  return new Promise((resolve, reject) => {
+    db.all('SELECT * FROM entries', [], (err, rows) => 
+      err ? reject(err) : resolve(rows));
+  });
+}
+
+async function addEntry(name, link) {
+  return new Promise((resolve, reject) => {
+    db.run('INSERT INTO entries (name, link) VALUES (?,?)',
+           [name, link], function(err) {
+             if (err) {
+               reject(err);
+             } else {
+               resolve(this.lastID);
+             }
+           });
+  });
+}
+
+async function updateReadStatus(id, read) {
+  return new Promise((resolve, reject) => {
+    db.run('UPDATE entries SET read = ? WHERE id = ?', 
+           [read, id], (err) => { if (err) reject(err); else resolve(); });
+  });
+}
+
+module.exports = { initDB, getEntries, addEntry, updateReadStatus };
+
+================
 File: next.config.js
 ================
 module.exports = {
@@ -199,9 +350,11 @@ File: package.json
     "export": "next export"
   },
   "dependencies": {
+    "fs": "^0.0.1-security",
     "next": "^15.2.1",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "sqlite3": "^5.1.7"
   }
 }
 
